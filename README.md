@@ -1,97 +1,137 @@
+# Mayhomes Dashboard
+
 <p align="center">
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A NestJS MVC application for managing and reporting on Bitrix24 Deals and Leads, integrated with Facebook Marketing API for campaign insights.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- **Bitrix24 Integration**: View and filter Deals and Leads from Bitrix24 CRM
+- **Facebook Insights**: Track campaign expenses and performance from Facebook Marketing API
+- **Advanced Filtering**: Filter by date range, stage, category, and search terms
+- **Sorting**: Sort table columns in ascending or descending order
+- **Pagination**: Navigate through large datasets with smart pagination
+- **Reports**: Generate detailed and simple campaign reports combining Bitrix24 and Facebook data
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- **Framework**: NestJS (Node.js)
+- **View Engine**: Handlebars (HBS)
+- **APIs**: Bitrix24 CRM API, Facebook Graph API (Marketing API)
 
-```bash
-$ npm install
-```
+## Project Setup
 
-## Compile and run the project
+### Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+- Bitrix24 account with API access
+- Facebook Developer account (optional, for Facebook Insights)
+
+### Installation
 
 ```bash
-# development
-$ npm run start
+# Install dependencies
+npm install
 
-# watch mode
-$ npm run start:dev
+# Copy environment variables template
+cp env.example .env
 
-# production mode
-$ npm run start:prod
+# Edit .env file with your credentials
+# See env.example for required variables
 ```
 
-## Run tests
+### Environment Variables
+
+Configure the following variables in `.env`:
+
+**Bitrix24 Configuration:**
+- `BITRIX24_WEBHOOK_URL`: Your Bitrix24 webhook URL
+- `BITRIX24_DEAL_SELECT_FIELDS`: Comma-separated list of Deal fields to retrieve
+- `BITRIX24_LEAD_SELECT_FIELDS`: Comma-separated list of Lead fields to retrieve
+
+**Facebook Configuration (Optional):**
+- `FACEBOOK_ACCESS_TOKEN`: Facebook Graph API access token
+- `FACEBOOK_AD_ACCOUNT_ID`: Facebook Ad Account ID
+- `FACEBOOK_APP_ID`: Facebook App ID
+- `FACEBOOK_APP_SECRET`: Facebook App Secret
+
+See `env.example` for detailed configuration and `FACEBOOK_SETUP.md` for Facebook API setup instructions.
+
+## Running the Application
 
 ```bash
-# unit tests
-$ npm run test
+# Development mode
+npm run start:dev
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Production mode
+npm run build
+npm run start:prod
 ```
 
-## Deployment
+The application will be available at `http://localhost:3000`
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Project Structure
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+```
+src/
+├── app.module.ts          # Root module
+├── main.ts                 # Application entry point
+├── bitrix24/              # Bitrix24 API integration
+├── deals/                 # Deals module (controller, service, DTO)
+├── leads/                 # Leads module (controller, service, DTO)
+├── reports/               # Reports module
+├── facebook/              # Facebook API integration
+└── common/                # Shared utilities and decorators
+
+views/
+├── layouts/               # Layout templates
+├── deals/                 # Deal views
+├── leads/                 # Lead views
+└── reports/               # Report views
+```
+
+## API Endpoints
+
+- `GET /` - Redirects to `/deals`
+- `GET /deals` - List all deals with filtering and pagination
+- `GET /leads` - List all leads with filtering and pagination
+- `GET /reports` - Reports index page
+- `GET /reports/campaigns` - Detailed campaign report
+- `GET /reports/simple` - Simple campaign report
+
+## Features Details
+
+### Filtering
+- Date range filtering (from/to dates)
+- Stage filtering
+- Category filtering
+- Search by title/name
+
+### Sorting
+- Click column headers to sort
+- Toggle between ascending and descending order
+- Sort state preserved in URL parameters
+
+### Pagination
+- Smart pagination display (shows page 1, 2, current ±2, last 2)
+- Direct page input for quick navigation
+- Page size: 50 items per page (Bitrix24 default)
+
+## Development
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Run tests
+npm run test
+
+# Run e2e tests
+npm run test:e2e
+
+# Test coverage
+npm run test:cov
 ```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
