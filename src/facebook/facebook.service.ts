@@ -16,18 +16,21 @@ export interface FacebookInsightData {
   [key: string]: unknown;
 }
 
-
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name);
   private readonly axiosInstance: AxiosInstance;
   private readonly accessToken: string | undefined;
+  private readonly appSecretProof: string | undefined;
   private readonly adAccountId: string | undefined;
-  private readonly apiVersion = 'v21.0';
+  private readonly apiVersion = 'v24.0';
 
   constructor(private configService: ConfigService) {
     this.accessToken = this.configService.get<string>('FACEBOOK_ACCESS_TOKEN');
     this.adAccountId = this.configService.get<string>('FACEBOOK_AD_ACCOUNT_ID');
+    this.appSecretProof = this.configService.get<string>(
+      'FACEBOOK_APP_SECRET_PROOF',
+    );
 
     this.axiosInstance = axios.create({
       baseURL: `https://graph.facebook.com/${this.apiVersion}`,
@@ -67,9 +70,11 @@ export class FacebookService {
 
       do {
         const params: Record<string, string> = {
-          access_token: this.accessToken,
-          level: 'campaign',
-          fields: 'campaign_id,campaign_name,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm',
+          appsecret_proof: this.appSecretProof ?? '',
+          access_token: this.accessToken ?? '',
+          // level: 'campaign',
+          fields:
+            'campaign_id,campaign_name,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm',
         };
 
         if (dateFrom) {
@@ -91,6 +96,8 @@ export class FacebookService {
           params: nextUrl ? undefined : params,
         });
 
+        console.log('response.data', response.data);
+
         const insights = response.data.data || [];
         allInsights.push(...insights);
 
@@ -103,7 +110,9 @@ export class FacebookService {
         }
       } while (nextUrl);
 
-      this.logger.log(`Fetched ${allInsights.length} campaign insights from Facebook`);
+      this.logger.log(
+        `Fetched ${allInsights.length} campaign insights from Facebook`,
+      );
       return allInsights;
     } catch (error: unknown) {
       this.logger.error('Error fetching insights from Facebook', error);
@@ -120,4 +129,3 @@ export class FacebookService {
     }
   }
 }
-
