@@ -8,4 +8,3 @@ import { FacebookService } from './facebook.service';
   exports: [FacebookService],
 })
 export class FacebookModule {}
-

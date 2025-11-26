@@ -6,7 +6,7 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @Redirect('/deals', 301)
+  @Redirect('/reports', 301)
   root() {
     return;
   }

@@ -1,83 +1,40 @@
-import { Controller, Get, Render, Query } from '@nestjs/common';
+import { Controller, Get, Render } from '@nestjs/common';
 import { ReportsService } from './reports.service';
-import { ReportFilterDto } from './dto/report-filter.dto';
 
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get()
-  @Render('reports/index')
-  async index() {
-    return {
-      title: 'Facebook Insight Reports',
-    };
-  }
-
-  @Get('campaigns')
   @Render('reports/campaigns')
-  async getCampaignsReport(@Query() filterDto: ReportFilterDto) {
+  async index() {
     try {
-      const data = await this.reportsService.getCampaignReport(
-        filterDto.sortBy,
-        filterDto.sortOrder,
-      );
+      const data = await this.reportsService.getAdsReport();
+      // Lọc bỏ cột ID nếu có, và đảm bảo Campaign ID ở đầu
+      const allColumns =
+        data.length > 0 ? Object.keys(data[0]) : [];
+      const columns = allColumns
+        .filter((col) => col !== 'ID')
+        .sort((a, b) => {
+          // Đưa Campaign ID lên đầu
+          if (a === 'Campaign ID') return -1;
+          if (b === 'Campaign ID') return 1;
+          return 0;
+        });
       return {
-        title: 'Campaign Report - Facebook Insight',
+        title: 'Facebook Ads Report',
         data,
-        columns: data.length > 0 ? Object.keys(data[0]) : [],
-        sort: {
-          sortBy: filterDto.sortBy || 'Chi phí trung bình / Lead',
-          sortOrder: filterDto.sortOrder || 'ASC',
-        },
+        columns,
       };
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       return {
-        title: 'Campaign Report - Facebook Insight',
+        title: 'Facebook Ads Report',
         data: [],
         columns: [],
-        sort: {
-          sortBy: filterDto.sortBy || 'Chi phí trung bình / Lead',
-          sortOrder: filterDto.sortOrder || 'ASC',
-        },
-        error: errorMessage,
-      };
-    }
-  }
-
-  @Get('simple')
-  @Render('reports/simple')
-  async getSimpleReport(@Query() filterDto: ReportFilterDto) {
-    try {
-      const data = await this.reportsService.getSimpleCampaignReport(
-        filterDto.sortBy,
-        filterDto.sortOrder,
-      );
-      return {
-        title: 'Simple Campaign Report',
-        data,
-        columns: data.length > 0 ? Object.keys(data[0]) : [],
-        sort: {
-          sortBy: filterDto.sortBy || 'lead_count',
-          sortOrder: filterDto.sortOrder || 'DESC',
-        },
-      };
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      return {
-        title: 'Simple Campaign Report',
-        data: [],
-        columns: [],
-        sort: {
-          sortBy: filterDto.sortBy || 'lead_count',
-          sortOrder: filterDto.sortOrder || 'DESC',
-        },
         error: errorMessage,
       };
     }
   }
 }
-

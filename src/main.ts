@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
@@ -37,75 +39,6 @@ async function bootstrap() {
       return dateString;
     }
   });
-
-  hbs.registerHelper(
-    'buildPaginationUrl',
-    (
-      page: number,
-      filters: {
-        dateFrom?: string;
-        dateTo?: string;
-        stageId?: string;
-        categoryId?: string;
-        search?: string;
-      },
-      sort?: { sortBy?: string; sortOrder?: string },
-    ) => {
-      const params = new URLSearchParams();
-      params.set('page', page.toString());
-
-      if (filters?.dateFrom) params.set('dateFrom', String(filters.dateFrom));
-      if (filters?.dateTo) params.set('dateTo', String(filters.dateTo));
-      if (filters?.stageId) params.set('stageId', String(filters.stageId));
-      if (filters?.categoryId)
-        params.set('categoryId', String(filters.categoryId));
-      if (filters?.search) params.set('search', String(filters.search));
-
-      if (sort?.sortBy) params.set('sortBy', String(sort.sortBy));
-      if (sort?.sortOrder) params.set('sortOrder', String(sort.sortOrder));
-
-      return `/deals?${params.toString()}`;
-    },
-  );
-
-  hbs.registerHelper(
-    'buildDealSortUrl',
-    (
-      sortBy: string,
-      currentSort: { sortBy: string; sortOrder: string },
-      filters: {
-        dateFrom?: string;
-        dateTo?: string;
-        stageId?: string;
-        categoryId?: string;
-        search?: string;
-      },
-    ) => {
-      const params = new URLSearchParams();
-      
-      // Toggle sort order nếu đang sort cùng cột
-      const currentSortBy = currentSort?.sortBy;
-      const currentSortOrder = currentSort?.sortOrder?.toUpperCase();
-      
-      if (currentSortBy === sortBy) {
-        // Nếu đang sort cùng cột, toggle order
-        params.set('sortOrder', currentSortOrder === 'ASC' ? 'DESC' : 'ASC');
-      } else {
-        // Nếu click cột khác, mặc định ASC
-        params.set('sortOrder', 'ASC');
-      }
-      params.set('sortBy', sortBy);
-
-      if (filters?.dateFrom) params.set('dateFrom', String(filters.dateFrom));
-      if (filters?.dateTo) params.set('dateTo', String(filters.dateTo));
-      if (filters?.stageId) params.set('stageId', String(filters.stageId));
-      if (filters?.categoryId)
-        params.set('categoryId', String(filters.categoryId));
-      if (filters?.search) params.set('search', String(filters.search));
-
-      return `/deals?${params.toString()}`;
-    },
-  );
 
   hbs.registerHelper(
     'buildLeadPaginationUrl',
@@ -154,7 +87,7 @@ async function bootstrap() {
       // Toggle sort order nếu đang sort cùng cột
       const currentSortBy = currentSort?.sortBy;
       const currentSortOrder = currentSort?.sortOrder?.toUpperCase();
-      
+
       if (currentSortBy === sortBy) {
         // Nếu đang sort cùng cột, toggle order
         params.set('sortOrder', currentSortOrder === 'ASC' ? 'DESC' : 'ASC');
@@ -245,6 +178,22 @@ async function bootstrap() {
     return a === b;
   });
 
+  hbs.registerHelper('ne', (a: unknown, b: unknown) => {
+    return a !== b;
+  });
+
+  hbs.registerHelper('and', (a: unknown, b: unknown) => {
+    return a && b;
+  });
+
+  hbs.registerHelper('or', (a: unknown, b: unknown) => {
+    return a || b;
+  });
+
+  hbs.registerHelper('not', (a: unknown) => {
+    return !a;
+  });
+
   hbs.registerHelper('lookup', (obj: Record<string, unknown>, key: string) => {
     return obj?.[key];
   });
@@ -260,41 +209,6 @@ async function bootstrap() {
     if (isNaN(num)) return value;
     return num.toLocaleString('vi-VN');
   });
-
-  hbs.registerHelper(
-    'buildPageUrl',
-    (
-      page: number,
-      filters: {
-        dateFrom?: string;
-        dateTo?: string;
-        stageId?: string;
-        categoryId?: string;
-        search?: string;
-        statusId?: string;
-        sourceId?: string;
-      },
-      sort?: { sortBy?: string; sortOrder?: string },
-      basePath: string = '/deals',
-    ) => {
-      const params = new URLSearchParams();
-      params.set('page', page.toString());
-
-      if (filters?.dateFrom) params.set('dateFrom', String(filters.dateFrom));
-      if (filters?.dateTo) params.set('dateTo', String(filters.dateTo));
-      if (filters?.stageId) params.set('stageId', String(filters.stageId));
-      if (filters?.categoryId)
-        params.set('categoryId', String(filters.categoryId));
-      if (filters?.statusId) params.set('statusId', String(filters.statusId));
-      if (filters?.sourceId) params.set('sourceId', String(filters.sourceId));
-      if (filters?.search) params.set('search', String(filters.search));
-
-      if (sort?.sortBy) params.set('sortBy', String(sort.sortBy));
-      if (sort?.sortOrder) params.set('sortOrder', String(sort.sortOrder));
-
-      return `${basePath}?${params.toString()}`;
-    },
-  );
 
   hbs.registerHelper(
     'getSortIcon',
@@ -322,7 +236,7 @@ async function bootstrap() {
       // Toggle sort order nếu đang sort cùng cột
       const currentSortBy = currentSort?.sortBy;
       const currentSortOrder = currentSort?.sortOrder?.toUpperCase();
-      
+
       if (currentSortBy === sortBy) {
         // Nếu đang sort cùng cột, toggle order
         params.set('sortOrder', currentSortOrder === 'ASC' ? 'DESC' : 'ASC');

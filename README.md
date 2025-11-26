@@ -4,11 +4,11 @@
   <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
 </p>
 
-A NestJS MVC application for managing and reporting on Bitrix24 Deals and Leads, integrated with Facebook Marketing API for campaign insights.
+A NestJS MVC application for managing and reporting on Bitrix24 Leads, integrated with Facebook Marketing API for campaign insights.
 
 ## Features
 
-- **Bitrix24 Integration**: View and filter Deals and Leads from Bitrix24 CRM
+- **Bitrix24 Integration**: View and filter Leads from Bitrix24 CRM
 - **Facebook Insights**: Track campaign expenses and performance from Facebook Marketing API
 - **Advanced Filtering**: Filter by date range, stage, category, and search terms
 - **Sorting**: Sort table columns in ascending or descending order
@@ -49,7 +49,6 @@ Configure the following variables in `.env`:
 
 **Bitrix24 Configuration:**
 - `BITRIX24_WEBHOOK_URL`: Your Bitrix24 webhook URL
-- `BITRIX24_DEAL_SELECT_FIELDS`: Comma-separated list of Deal fields to retrieve
 - `BITRIX24_LEAD_SELECT_FIELDS`: Comma-separated list of Lead fields to retrieve
 
 **Facebook Configuration (Optional):**
@@ -80,7 +79,6 @@ src/
 ├── app.module.ts          # Root module
 ├── main.ts                 # Application entry point
 ├── bitrix24/              # Bitrix24 API integration
-├── deals/                 # Deals module (controller, service, DTO)
 ├── leads/                 # Leads module (controller, service, DTO)
 ├── reports/               # Reports module
 ├── facebook/              # Facebook API integration
@@ -88,15 +86,13 @@ src/
 
 views/
 ├── layouts/               # Layout templates
-├── deals/                 # Deal views
 ├── leads/                 # Lead views
 └── reports/               # Report views
 ```
 
 ## API Endpoints
 
-- `GET /` - Redirects to `/deals`
-- `GET /deals` - List all deals with filtering and pagination
+- `GET /` - Redirects to `/reports`
 - `GET /leads` - List all leads with filtering and pagination
 - `GET /reports` - Reports index page
 - `GET /reports/campaigns` - Detailed campaign report
@@ -106,8 +102,8 @@ views/
 
 ### Filtering
 - Date range filtering (from/to dates)
-- Stage filtering
-- Category filtering
+- Status filtering
+- Source filtering
 - Search by title/name
 
 ### Sorting

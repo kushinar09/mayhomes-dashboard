@@ -379,11 +379,6 @@
             </span>
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link" href="/deals">
-                        <i class="bi bi-briefcase"></i> Deals
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link active" href="/leads">
                         <i class="bi bi-person-lines-fill"></i> Leads
                     </a>
@@ -485,13 +480,13 @@
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{buildLeadSortUrl 'STATUS_ID' sort filters}}" class="text-decoration-none">
-                                            Status {{{getSortIcon 'STATUS_ID' sort}}}
+                                        <a href="{{buildLeadSortUrl 'STATUS_NAME' sort filters}}" class="text-decoration-none">
+                                            Status {{{getSortIcon 'STATUS_NAME' sort}}}
                                         </a>
                                     </th>
                                     <th>
-                                        <a href="{{buildLeadSortUrl 'SOURCE_ID' sort filters}}" class="text-decoration-none">
-                                            Source {{{getSortIcon 'SOURCE_ID' sort}}}
+                                        <a href="{{buildLeadSortUrl 'SOURCE_NAME' sort filters}}" class="text-decoration-none">
+                                            Source {{{getSortIcon 'SOURCE_NAME' sort}}}
                                         </a>
                                     </th>
                                     <th>
@@ -534,17 +529,15 @@
                                         {{#unless NAME}}{{#unless LAST_NAME}}<span class="text-muted">-</span>{{/unless}}{{/unless}}
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">{{STATUS_ID}}</span>
-                                        {{#if STATUS_DESCRIPTION}}
-                                        <br><small class="text-muted">{{STATUS_DESCRIPTION}}</small>
+                                        {{#if STATUS_NAME}}
+                                            <span class="badge bg-info">{{STATUS_NAME}}</span>
+                                        {{else}}
+                                            <span class="text-muted">-</span>
                                         {{/if}}
                                     </td>
                                     <td>
-                                        {{#if SOURCE_ID}}
-                                            {{SOURCE_ID}}
-                                            {{#if SOURCE_DESCRIPTION}}
-                                            <br><small class="text-muted">{{SOURCE_DESCRIPTION}}</small>
-                                            {{/if}}
+                                        {{#if SOURCE_NAME}}
+                                            {{SOURCE_NAME}}
                                         {{else}}
                                             <span class="text-muted">-</span>
                                         {{/if}}

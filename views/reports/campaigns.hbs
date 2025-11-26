@@ -258,11 +258,6 @@
             </span>
             <ul class="navbar-nav">
                 <li class="nav-item">
-                    <a class="nav-link" href="/deals">
-                        <i class="bi bi-briefcase"></i> Deals
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link" href="/leads">
                         <i class="bi bi-person-lines-fill"></i> Leads
                     </a>
@@ -306,11 +301,7 @@
                     <thead>
                         <tr>
                             {{#each columns}}
-                            <th>
-                                <a href="{{buildReportSortUrl this ../sort 'campaigns'}}" class="text-decoration-none text-white">
-                                    {{this}} {{{getSortIcon this ../sort}}}
-                                </a>
-                            </th>
+                            <th>{{this}}</th>
                             {{/each}}
                         </tr>
                     </thead>
@@ -318,12 +309,12 @@
                         {{#each data}}
                         <tr>
                             {{#each ../columns}}
-                            <td class="{{#if (isNumeric (lookup ../this this))}}number-cell{{/if}}">
+                            <td class="{{#if (and (isNumeric (lookup ../this this)) (ne this 'Campaign ID'))}}number-cell{{/if}}">
                                 {{#if (lookup ../this this)}}
-                                    {{#if (isNumeric (lookup ../this this))}}
-                                        {{formatNumber (lookup ../this this)}}
-                                    {{else}}
+                                    {{#if (or (eq this 'Campaign ID') (not (isNumeric (lookup ../this this))))}}
                                         {{lookup ../this this}}
+                                    {{else}}
+                                        {{formatNumber (lookup ../this this)}}
                                     {{/if}}
                                 {{else}}
                                     <span class="text-muted">-</span>

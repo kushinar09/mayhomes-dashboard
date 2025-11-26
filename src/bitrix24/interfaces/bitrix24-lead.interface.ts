@@ -5,9 +5,11 @@ export interface Bitrix24Lead {
   LAST_NAME?: string;
   SECOND_NAME?: string;
   STATUS_ID: string;
-  STATUS_DESCRIPTION?: string;
+  STATUS_NAME?: string;
+  STATUS_DESCRIPTION?: string; // Deprecated, use STATUS_NAME instead
   SOURCE_ID?: string;
-  SOURCE_DESCRIPTION?: string;
+  SOURCE_NAME?: string;
+  SOURCE_DESCRIPTION?: string; // Deprecated, use SOURCE_NAME instead
   CURRENCY_ID: string;
   OPPORTUNITY: string;
   COMPANY_TITLE?: string;

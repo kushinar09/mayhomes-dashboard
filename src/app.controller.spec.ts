@@ -15,7 +15,7 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should redirect to /deals', () => {
+    it('should redirect to /reports', () => {
       const result = appController.root();
       expect(result).toBeUndefined();
     });

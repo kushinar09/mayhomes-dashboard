@@ -30,9 +30,9 @@ export class LeadsService {
     'LAST_NAME',
     'SECOND_NAME',
     'STATUS_ID',
-    'STATUS_DESCRIPTION',
+    'STATUS_NAME',
     'SOURCE_ID',
-    'SOURCE_DESCRIPTION',
+    'SOURCE_NAME',
     'CURRENCY_ID',
     'OPPORTUNITY',
     'COMPANY_TITLE',
@@ -76,10 +76,19 @@ export class LeadsService {
 
     // Order by sortBy hoặc mặc định DATE_CREATE desc
     // Bitrix24 yêu cầu: asc hoặc desc (lowercase)
-    const sortBy = filterDto.sortBy || 'DATE_CREATE';
+    // Map STATUS_NAME và SOURCE_NAME về STATUS_ID và SOURCE_ID để sort
+    let sortBy = filterDto.sortBy || 'DATE_CREATE';
     const sortOrder = filterDto.sortOrder?.toLowerCase() === 'asc' ? 'asc' : 'desc';
+    
+    // Map NAME fields về ID fields cho Bitrix24 API sorting
+    const sortByMapping: Record<string, string> = {
+      'STATUS_NAME': 'STATUS_ID',
+      'SOURCE_NAME': 'SOURCE_ID',
+    };
+    const apiSortBy = sortByMapping[sortBy] || sortBy;
+    
     const order = {
-      [sortBy]: sortOrder,
+      [apiSortBy]: sortOrder,
     };
 
     try {
@@ -107,26 +116,51 @@ export class LeadsService {
             ]),
           ];
           
-          if (userIds.length > 0) {
-            const userNames = await this.bitrix24Service.getUserNames(userIds);
-            // Gắn user names vào leads
-            detailedLeads = detailedLeads.map((lead) => ({
-              ...lead,
-              ASSIGNED_BY_NAME: userNames[lead.ASSIGNED_BY_ID] || lead.ASSIGNED_BY_ID,
-              CREATED_BY_NAME: userNames[lead.CREATED_BY_ID] || lead.CREATED_BY_ID,
-            }));
-          }
+          // Lấy status names và source names
+          const userNamesPromise = userIds.length > 0 
+            ? this.bitrix24Service.getUserNames(userIds) 
+            : Promise.resolve({} as Record<string, string>);
+          
+          const [userNames, statusNames, sourceNames] = await Promise.all([
+            userNamesPromise,
+            this.bitrix24Service.getLeadStatusNames(),
+            this.bitrix24Service.getLeadSourceNames(),
+          ]);
+
+          // Gắn user names, status names và source names vào leads
+          detailedLeads = detailedLeads.map((lead) => {
+            const leadData = lead as Bitrix24Lead;
+            return {
+              ...leadData,
+              ASSIGNED_BY_NAME: userNames[leadData.ASSIGNED_BY_ID] || leadData.ASSIGNED_BY_ID,
+              CREATED_BY_NAME: userNames[leadData.CREATED_BY_ID] || leadData.CREATED_BY_ID,
+              STATUS_NAME: statusNames[leadData.STATUS_ID] || leadData.STATUS_NAME,
+              SOURCE_NAME: sourceNames[leadData.SOURCE_ID as string] || leadData.SOURCE_NAME,
+            };
+          });
         } catch (batchError) {
           this.logger.warn('Error getting leads details via batch, using list data', batchError);
           // Fallback to list data nếu batch fail
         }
       }
 
+      // Nếu sort theo NAME, cần sort client-side sau khi lấy data
+      let finalLeads = detailedLeads;
+      if (sortBy === 'STATUS_NAME' || sortBy === 'SOURCE_NAME') {
+        finalLeads = [...detailedLeads].sort((a, b) => {
+          const aValue = (a[sortBy] as string || '').toLowerCase();
+          const bValue = (b[sortBy] as string || '').toLowerCase();
+          const comparison = aValue.localeCompare(bValue, 'vi');
+          return sortOrder === 'asc' ? comparison : -comparison;
+        });
+      }
+
+
       const totalItems = response.total || 0;
       const totalPages = Math.ceil(totalItems / limit);
 
       return {
-        leads: detailedLeads,
+        leads: finalLeads,
         pagination: {
           currentPage: page,
           totalPages,

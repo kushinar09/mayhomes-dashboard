@@ -353,14 +353,14 @@ export class Bitrix24Service {
 
       for (const batch of batches) {
         const commands: Record<string, string> = {};
-        
+
         batch.forEach((dealId) => {
           // Bitrix24 batch format: "method?params" hoặc JSON string
           commands[`deal_${dealId}`] = `crm.deal.get?id=${dealId}`;
         });
 
         const batchResult = await this.batchRequest(commands);
-        
+
         batch.forEach((dealId) => {
           const dealKey = `deal_${dealId}`;
           const dealData = batchResult[dealKey];
@@ -401,13 +401,13 @@ export class Bitrix24Service {
 
       for (const batch of batches) {
         const commands: Record<string, string> = {};
-        
+
         batch.forEach((leadId) => {
           commands[`lead_${leadId}`] = `crm.lead.get?id=${leadId}`;
         });
 
         const batchResult = await this.batchRequest(commands);
-        
+
         batch.forEach((leadId) => {
           const leadKey = `lead_${leadId}`;
           const leadData = batchResult[leadKey];
@@ -446,25 +446,35 @@ export class Bitrix24Service {
 
       for (const batch of batches) {
         const commands: Record<string, string> = {};
-        
+
         batch.forEach((userId) => {
           commands[`user_${userId}`] = `user.get?id=${userId}`;
         });
 
         const batchResult = await this.batchRequest(commands);
-        
+
         batch.forEach((userId) => {
           const userKey = `user_${userId}`;
           const userData = batchResult[userKey];
           if (userData && typeof userData === 'object') {
-            let user: { NAME?: string; LAST_NAME?: string; ID: string } | null = null;
+            let user: { NAME?: string; LAST_NAME?: string; ID: string } | null =
+              null;
             if ('result' in userData) {
-              user = userData.result as { NAME?: string; LAST_NAME?: string; ID: string };
+              user = userData.result as {
+                NAME?: string;
+                LAST_NAME?: string;
+                ID: string;
+              };
             } else {
-              user = userData as { NAME?: string; LAST_NAME?: string; ID: string };
+              user = userData as {
+                NAME?: string;
+                LAST_NAME?: string;
+                ID: string;
+              };
             }
             if (user) {
-              const fullName = [user.NAME, user.LAST_NAME].filter(Boolean).join(' ') || userId;
+              const fullName =
+                [user.NAME, user.LAST_NAME].filter(Boolean).join(' ') || userId;
               userNames[userId] = fullName;
             }
           }
@@ -474,6 +484,85 @@ export class Bitrix24Service {
       return userNames;
     } catch (error: unknown) {
       this.logger.error('Error getting user names', error);
+      return {};
+    }
+  }
+
+  /**
+   * Lấy danh sách status names từ Bitrix24 cho leads
+   */
+  async getLeadStatusNames(): Promise<Record<string, string>> {
+    try {
+      const response = await this.axiosInstance.post<{
+        result: Array<{ STATUS_ID: string; NAME: string }>;
+      }>(`${this.webhookUrl}crm.status.list`, {
+        filter: { ENTITY_ID: 'STATUS' },
+        select: ['STATUS_ID', 'NAME'],
+      });
+
+      const statusNames: Record<string, string> = {};
+      if (response.data.result) {
+        response.data.result.forEach((status) => {
+          statusNames[status.STATUS_ID] = status.NAME;
+        });
+      }
+
+      return statusNames;
+    } catch (error: unknown) {
+      this.logger.error('Error getting lead status names', error);
+      return {};
+    }
+  }
+
+  /**
+   * Lấy danh sách source names từ Bitrix24 cho leads
+   */
+  async getLeadSourceNames(): Promise<Record<string, string>> {
+    try {
+      // Dùng crm.enum.fields để lấy source enum values
+      const response = await this.axiosInstance.post<{
+        result: {
+          SOURCE?: {
+            items?: Record<string, { ID: string; VALUE: string }>;
+          };
+        };
+      }>(`${this.webhookUrl}crm.enum.fields`, {
+        entityType: 'lead',
+      });
+
+      const sourceNames: Record<string, string> = {};
+      if (response.data.result?.SOURCE?.items) {
+        Object.values(response.data.result.SOURCE.items).forEach((item) => {
+          sourceNames[item.ID] = item.VALUE;
+        });
+        this.logger.log(
+          `Fetched ${Object.keys(sourceNames).length} source names from enum.fields`,
+        );
+      }
+
+      // Nếu không lấy được từ enum.fields, thử dùng crm.status.list
+      if (Object.keys(sourceNames).length === 0) {
+        this.logger.warn('No sources from enum.fields, trying crm.status.list');
+        const statusResponse = await this.axiosInstance.post<{
+          result: Array<{ STATUS_ID: string; NAME: string }>;
+        }>(`${this.webhookUrl}crm.status.list`, {
+          filter: { ENTITY_ID: 'SOURCE' },
+          select: ['STATUS_ID', 'NAME'],
+        });
+
+        if (statusResponse.data.result) {
+          statusResponse.data.result.forEach((source) => {
+            sourceNames[source.STATUS_ID] = source.NAME;
+          });
+          this.logger.log(
+            `Fetched ${Object.keys(sourceNames).length} source names from status.list`,
+          );
+        }
+      }
+
+      return sourceNames;
+    } catch (error: unknown) {
+      this.logger.error('Error getting lead source names', error);
       return {};
     }
   }
@@ -522,11 +611,13 @@ export class Bitrix24Service {
       }
 
       const response = await this.axiosInstance.post<{
-        result: Record<string, unknown>[] | {
-          result: Record<string, unknown>[];
-          total: number;
-          next?: number;
-        };
+        result:
+          | Record<string, unknown>[]
+          | {
+              result: Record<string, unknown>[];
+              total: number;
+              next?: number;
+            };
         total?: number;
         next?: number;
       }>('crm.item.list', requestData);
@@ -550,7 +641,10 @@ export class Bitrix24Service {
         };
       }
     } catch (error: unknown) {
-      this.logger.error('Error fetching smart process items from Bitrix24', error);
+      this.logger.error(
+        'Error fetching smart process items from Bitrix24',
+        error,
+      );
       if (axios.isAxiosError(error)) {
         const errorData = error.response?.data as
           | { error_description?: string }
