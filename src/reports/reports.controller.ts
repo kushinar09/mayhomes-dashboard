@@ -37,4 +37,37 @@ export class ReportsController {
       };
     }
   }
+
+  @Get('lead-campaign')
+  @Render('reports/lead-campaign')
+  async getLeadCampaignReport() {
+    try {
+      const result = await this.reportsService.getLeadCampaignReport();
+      const table1Columns =
+        result.table1.length > 0 ? Object.keys(result.table1[0]) : [];
+      const table2Columns =
+        result.table2.length > 0 ? Object.keys(result.table2[0]) : [];
+      return {
+        table1: result.table1,
+        table1Columns,
+        table2: result.table2,
+        table2Columns,
+        projects: result.projects,
+        campaigns: result.campaigns,
+      };
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      return {
+        table1: [],
+        table1Columns: [],
+        table2: [],
+        table2Columns: [],
+        projects: [],
+        campaigns: [],
+        error: errorMessage,
+      };
+    }
+  }
+
 }

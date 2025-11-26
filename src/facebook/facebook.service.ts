@@ -363,7 +363,7 @@ export class FacebookService {
         }
       } else {
         // Request đầu tiên - ad ID là số không có prefix
-        requestUrl = `/${adId}/insights`;
+        requestUrl = `/${adId}/insights?date_preset=maximum`;
         requestParams = params;
       }
 
@@ -378,7 +378,11 @@ export class FacebookService {
       });
 
       const insights = response.data.data || [];
-      allInsights.push(...insights);
+
+      const insightsWithSpend = insights.filter(
+        (insight) => insight.spend !== null && insight.spend !== undefined,
+      );
+      allInsights.push(...insightsWithSpend);
 
       // Handle pagination
       nextUrl = response.data.paging?.next;
@@ -595,7 +599,7 @@ export class FacebookService {
     // Tạo batch requests với limit=100 để tăng số insights mỗi page
     const batchRequests = campaignIds.map((campaignId, index) => ({
       method: 'GET' as const,
-      relative_url: `${campaignId}/insights?limit=100`,
+      relative_url: `${campaignId}/insights?date_preset=maximum&limit=100`,
       name: `campaign_${index}`,
     }));
 
@@ -780,7 +784,7 @@ export class FacebookService {
         }
       } else {
         // Request đầu tiên - campaign ID là số không có prefix
-        requestUrl = `/${campaignId}/insights`;
+        requestUrl = `/${campaignId}/insights?date_preset=maximum`;
         requestParams = params;
       }
 

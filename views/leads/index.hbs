@@ -385,7 +385,12 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="/reports">
-                        <i class="bi bi-bar-chart"></i> Reports
+                        <i class="bi bi-bar-chart"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/reports/lead-campaign">
+                        <i class="bi bi-diagram-3"></i> Lead & Campaign
                     </a>
                 </li>
             </ul>
@@ -395,10 +400,6 @@
     <div class="container-fluid mt-4">
         <div class="row">
             <div class="col-12">
-                <h2>
-                    <i class="bi bi-person-lines-fill"></i> Quản lý Leads
-                </h2>
-
                 {{#if error}}
                 <div class="alert alert-danger alert-dismissible fade show" role="alert">
                     <i class="bi bi-exclamation-triangle"></i> {{error}}
@@ -422,12 +423,22 @@
                                 <input type="date" class="form-control" id="dateTo" name="dateTo" value="{{filters.dateTo}}">
                             </div>
                             <div class="col-md-2">
-                                <label for="statusId" class="form-label">Status ID</label>
-                                <input type="text" class="form-control" id="statusId" name="statusId" value="{{filters.statusId}}" placeholder="VD: NEW">
+                                <label for="statusName" class="form-label">Status</label>
+                                <select class="form-select" id="statusName" name="statusName">
+                                    <option value="">Tất cả</option>
+                                    {{#each statusNames}}
+                                    <option value="{{this}}" {{#if (eq ../filters.statusName this)}}selected{{/if}}>{{this}}</option>
+                                    {{/each}}
+                                </select>
                             </div>
                             <div class="col-md-2">
-                                <label for="sourceId" class="form-label">Source ID</label>
-                                <input type="text" class="form-control" id="sourceId" name="sourceId" value="{{filters.sourceId}}" placeholder="VD: WEB">
+                                <label for="sourceName" class="form-label">Source</label>
+                                <select class="form-select" id="sourceName" name="sourceName">
+                                    <option value="">Tất cả</option>
+                                    {{#each sourceNames}}
+                                    <option value="{{this}}" {{#if (eq ../filters.sourceName this)}}selected{{/if}}>{{this}}</option>
+                                    {{/each}}
+                                </select>
                             </div>
                             <div class="col-md-2">
                                 <label for="search" class="form-label">Tìm kiếm</label>

@@ -7,6 +7,7 @@ import { Bitrix24Module } from '../bitrix24/bitrix24.module';
   imports: [Bitrix24Module],
   controllers: [LeadsController],
   providers: [LeadsService],
+  exports: [LeadsService],
 })
 export class LeadsModule {}
 

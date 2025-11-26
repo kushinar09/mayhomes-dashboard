@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { FacebookService, FacebookInsight } from '../facebook/facebook.service';
+import { LeadsService } from '../leads/leads.service';
+import { Bitrix24Service } from '../bitrix24/bitrix24.service';
+import { Bitrix24Lead } from '../bitrix24/interfaces/bitrix24-lead.interface';
 
 export interface AdReportRow {
   'Campaign ID'?: string;
@@ -16,11 +19,45 @@ export interface AdReportRow {
   [key: string]: unknown;
 }
 
+export interface LeadCampaignReportRow {
+  Project: string;
+  Campaign: string;
+  'Số Leads': number;
+  'CHỐT DEAL THÀNH CÔNG': number;
+  'KHÔNG QUAN TÂM': number;
+  'ĐANG QUAN TÂM': number;
+  'LEAD MỚI': number;
+  'THẤT BẠI': number;
+  'ĐANG CHĂM': number;
+  'ĐÃ GẶP KHÁCH': number;
+  'Tổng chi phí': number;
+  'Chi phí trung bình / Lead': number;
+}
+
+export interface LeadStatusReportRow {
+  Project: string;
+  Campaign: string;
+  'Status ID': string;
+  'Status Name': string;
+  'Số Leads': number;
+}
+
+export interface LeadCampaignReportResult {
+  table1: LeadStatusReportRow[]; // Bảng 1: Leads theo status
+  table2: LeadCampaignReportRow[]; // Bảng 2: Leads và campaigns với chi phí
+  projects: string[];
+  campaigns: Array<{ project: string; campaign: string }>;
+}
+
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
 
-  constructor(private readonly facebookService: FacebookService) {}
+  constructor(
+    private readonly facebookService: FacebookService,
+    private readonly leadsService: LeadsService,
+    private readonly bitrix24Service: Bitrix24Service,
+  ) {}
 
   /**
    * Lấy danh sách campaigns từ Facebook và lấy insights cho mỗi campaign
@@ -36,23 +73,24 @@ export class ReportsService {
         `Total campaigns fetched: ${campaignsWithAccountMap.campaigns.length}`,
       );
 
-      // Lọc campaigns có tên bắt đầu bằng "Mayhomes"
-      const filteredCampaigns = campaignsWithAccountMap.campaigns.filter(
-        (campaign) => {
-          const campaignName = campaign.name || '';
-          return campaignName.toLowerCase().startsWith('mayhomes');
-        },
-      );
+      // // Lọc campaigns có tên bắt đầu bằng "Mayhomes"
+      // const filteredCampaigns = campaignsWithAccountMap.campaigns.filter(
+      //   (campaign) => {
+      //     const campaignName = campaign.name || '';
+      //     return campaignName.toLowerCase().startsWith('mayhomes');
+      //   },
+      // );
 
-      this.logger.log(
-        `Filtered ${filteredCampaigns.length} campaigns with name starting with "Mayhomes"`,
-      );
+      // this.logger.log(
+      //   `Filtered ${filteredCampaigns.length} campaigns with name starting with "Mayhomes"`,
+      // );
 
+      const filteredCampaigns = campaignsWithAccountMap.campaigns;
       // Lấy insights cho các campaigns bằng Batch API
       const campaignIds = filteredCampaigns.map((campaign) => campaign.id);
 
-      // Batch size = 50 (giới hạn của Facebook Batch API)
-      const batchSize = 50;
+      // Batch size = 100
+      const batchSize = 100;
       const campaignInsightsMap = new Map<string, FacebookInsight[]>();
 
       // Xử lý từng batch
@@ -129,14 +167,362 @@ export class ReportsService {
         } as AdReportRow;
       });
 
+      // // Chỉ lấy các campaign có insights (có ít nhất một trong Impressions, Spend, hoặc Clicks)
+      // const campaignsWithInsights = reportRows.filter(
+      //   (r) => r.Impressions || r.Spend || r.Clicks,
+      // );
+
+      const campaignsWithInsights = reportRows;
+
       this.logger.log(
-        `Returning ${reportRows.length} campaigns (including ${reportRows.filter((r) => !r.Impressions && !r.Spend && !r.Clicks).length} without insights)`,
+        `Returning ${campaignsWithInsights.length} campaigns with insights (filtered from ${reportRows.length} total campaigns)`,
       );
 
-      return reportRows;
+      return campaignsWithInsights;
     } catch (error) {
       this.logger.error('Error getting ads report', error);
       throw error;
     }
+  }
+
+  /**
+   * Lấy báo cáo kết hợp leads và campaigns
+   * Logic tương tự SQL query: parse source_name từ leads, aggregate theo project và campaign,
+   * join với expenses từ campaigns
+   */
+  async getLeadCampaignReport(): Promise<LeadCampaignReportResult> {
+    try {
+      // Bước 1: Lấy tất cả leads và campaigns song song để tăng tốc độ
+      this.logger.log('Fetching all leads and campaigns in parallel...');
+
+      // Lấy source names và status names để map SOURCE_ID và STATUS_ID
+      const [sourceNames, statusNames] = await Promise.all([
+        this.bitrix24Service.getLeadSourceNames(),
+        this.bitrix24Service.getLeadStatusNames(),
+      ]);
+
+      const [allLeads, facebookCampaigns] = await Promise.all([
+        // Lấy tất cả leads (lấy từng batch)
+        (async () => {
+          const leads: Bitrix24Lead[] = [];
+          let start = 0;
+          const batchSize = 50;
+          let hasMore = true;
+
+          while (hasMore) {
+            const response = await this.bitrix24Service.getLeads({
+              start,
+              select: ['ID', 'SOURCE_ID', 'STATUS_ID'],
+            });
+
+            const batchLeads = response.result || [];
+
+            // Map SOURCE_ID sang SOURCE_NAME và STATUS_ID sang STATUS_NAME
+            const leadsWithMappedNames = batchLeads.map((lead) => ({
+              ...lead,
+              SOURCE_NAME:
+                sourceNames[lead.SOURCE_ID as string] ||
+                lead.SOURCE_NAME ||
+                undefined,
+              STATUS_NAME:
+                statusNames[lead.STATUS_ID] ||
+                lead.STATUS_NAME ||
+                undefined,
+            }));
+
+            // // Debug: Log sample lead để xem fields có sẵn
+            // if (leadsWithMappedNames.length > 0 && start === 0) {
+            //   this.logger.log(
+            //     `Sample lead fields (first lead): ${JSON.stringify(Object.keys(leadsWithMappedNames[0]))}`,
+            //   );
+            //   this.logger.log(
+            //     `Sample lead STATUS_ID: ${leadsWithMappedNames[0].STATUS_ID}, STATUS_NAME: ${leadsWithMappedNames[0].STATUS_NAME}`,
+            //   );
+            // }
+
+            leads.push(...leadsWithMappedNames);
+
+            if (batchLeads.length < batchSize) {
+              hasMore = false;
+            } else {
+              start += batchSize;
+            }
+          }
+
+          this.logger.log(`Fetched total ${leads.length} leads`);
+          return leads;
+        })(),
+        // Lấy campaigns
+        this.getAdsReport(),
+      ]);
+
+      this.logger.log(`Fetched ${facebookCampaigns.length} campaigns`);
+      this.logger.log(
+        `Total leads fetched: ${allLeads.length}, Leads with SOURCE_NAME: ${allLeads.filter((lead) => lead.SOURCE_NAME).length}`,
+      );
+
+      // Bước 2: Parse source_name và aggregate leads
+      // Parse: split by ' | ', phần 1 là project_name, phần 2 là campaign_name
+      interface LeadParsed {
+        project_name: string;
+        campaign_name: string;
+        status_id: string;
+        status_name?: string;
+      }
+
+      // Debug: Log một số SOURCE_NAME mẫu để kiểm tra format (commented out)
+      // const sampleSourceNames = allLeads
+      //   .filter((lead) => lead.SOURCE_NAME)
+      //   .slice(0, 10)
+      //   .map((lead) => String(lead.SOURCE_NAME));
+      // this.logger.log(
+      //   `Sample SOURCE_NAME values (first 10): ${JSON.stringify(sampleSourceNames)}`,
+      // );
+
+      this.logger.log('List campaign names:');
+      const leadParsed: LeadParsed[] = allLeads
+        .filter((lead) => lead.SOURCE_NAME)
+        .map((lead) => {
+          const sourceName = String(lead.SOURCE_NAME || '');
+          const parts = sourceName.split('|').map((p) => p.trim());
+          if (parts[1]) {
+            this.logger.log(parts[1] + ' ' || '');
+          }
+          return {
+            project_name: parts[0] || '',
+            campaign_name: parts[1] || '',
+            status_id: lead.STATUS_ID,
+            status_name: lead.STATUS_NAME,
+          };
+        })
+        .filter((lp) => lp.project_name && lp.campaign_name);
+
+      this.logger.log(
+        `After parsing: ${leadParsed.length} leads have valid project_name and campaign_name (from ${allLeads.filter((lead) => lead.SOURCE_NAME).length} leads with SOURCE_NAME)`,
+      );
+
+      // Aggregate leads theo project_name và campaign_name
+      interface LeadAgg {
+        project_name: string;
+        campaign_name: string;
+        total_leads: number;
+        converted_count: number;
+        not_interested_count: number;
+        interested_count: number;
+        new_count: number;
+        junk_count: number;
+        in_process_count: number;
+        met_customer_count: number;
+      }
+
+      const leadAggMap = new Map<string, LeadAgg>();
+
+      leadParsed.forEach((lp) => {
+        const key = `${lp.project_name}|${lp.campaign_name}`;
+        let agg = leadAggMap.get(key);
+
+        if (!agg) {
+          agg = {
+            project_name: lp.project_name,
+            campaign_name: lp.campaign_name,
+            total_leads: 0,
+            converted_count: 0,
+            not_interested_count: 0,
+            interested_count: 0,
+            new_count: 0,
+            junk_count: 0,
+            in_process_count: 0,
+            met_customer_count: 0,
+          };
+          leadAggMap.set(key, agg);
+        }
+
+        agg.total_leads++;
+        if (lp.status_id === 'CONVERTED') agg.converted_count++;
+        else if (lp.status_id === 'UC_OHHPZK') agg.not_interested_count++;
+        else if (lp.status_id === 'UC_W9N2SA') agg.interested_count++;
+        else if (lp.status_id === 'NEW') agg.new_count++;
+        else if (lp.status_id === 'JUNK') agg.junk_count++;
+        else if (lp.status_id === 'IN_PROCESS') agg.in_process_count++;
+        else if (lp.status_id === 'UC_AOIPKI') agg.met_customer_count++;
+      });
+
+      const leadAgg = Array.from(leadAggMap.values());
+      this.logger.log(
+        `Aggregated ${leadAgg.length} unique project-campaign combinations`,
+      );
+
+      // Bước 3: Parse campaign name từ campaigns đã lấy
+      // Parse campaign name: split by ' - ', lấy phần thứ 2
+      interface TrackingParsed {
+        campaign_name_clean: string;
+        total_expenses: number;
+      }
+
+      const trackingMap = new Map<string, number>();
+
+      facebookCampaigns.forEach((campaign) => {
+        const campaignName = String(campaign.Name || '');
+        // // Filter campaigns có tên bắt đầu bằng "Mayhomes" (case insensitive)
+        // if (!campaignName.toLowerCase().startsWith('mayhomes')) {
+        //   return;
+        // }
+
+        // Parse: split by ' - ', lấy phần thứ 2
+        const parts = campaignName.split(' - ').map((p) => p.trim());
+        const campaignNameClean = parts[1] || '';
+
+        if (campaignNameClean) {
+          const spend = campaign.Spend || 0;
+          const existing = trackingMap.get(campaignNameClean) || 0;
+          trackingMap.set(campaignNameClean, existing + spend);
+        }
+      });
+
+      const trackingParsed: TrackingParsed[] = Array.from(
+        trackingMap.entries(),
+      ).map(([campaign_name_clean, total_expenses]) => ({
+        campaign_name_clean,
+        total_expenses,
+      }));
+
+      this.logger.log(
+        `Parsed ${trackingParsed.length} unique campaign expenses`,
+      );
+
+      // Bước 4: Join lead_agg với tracking_parsed
+      const reportRows: LeadCampaignReportRow[] = [];
+
+      leadAgg.forEach((lead) => {
+        const tracking = trackingParsed.find(
+          (t) => t.campaign_name_clean === lead.campaign_name,
+        );
+
+        // Chỉ thêm vào report nếu có cả lead và tracking data
+        if (tracking) {
+          const avgCostPerLead =
+            lead.total_leads > 0
+              ? Math.round(tracking.total_expenses / lead.total_leads)
+              : 0;
+
+          reportRows.push({
+            Project: lead.project_name,
+            Campaign: lead.campaign_name,
+            'Số Leads': lead.total_leads,
+            'CHỐT DEAL THÀNH CÔNG': lead.converted_count,
+            'KHÔNG QUAN TÂM': lead.not_interested_count,
+            'ĐANG QUAN TÂM': lead.interested_count,
+            'LEAD MỚI': lead.new_count,
+            'THẤT BẠI': lead.junk_count,
+            'ĐANG CHĂM': lead.in_process_count,
+            'ĐÃ GẶP KHÁCH': lead.met_customer_count,
+            'Tổng chi phí': Math.round(tracking.total_expenses * 100) / 100,
+            'Chi phí trung bình / Lead': avgCostPerLead,
+          });
+        }
+      });
+
+      // Sort theo "Chi phí trung bình / Lead" ASC
+      reportRows.sort(
+        (a, b) =>
+          a['Chi phí trung bình / Lead'] - b['Chi phí trung bình / Lead'],
+      );
+
+      // Lấy danh sách unique projects và campaigns
+      const uniqueProjects = Array.from(
+        new Set(reportRows.map((row) => row.Project)),
+      ).sort();
+
+      const campaignsByProject = new Map<string, Set<string>>();
+      reportRows.forEach((row) => {
+        if (!campaignsByProject.has(row.Project)) {
+          campaignsByProject.set(row.Project, new Set());
+        }
+        campaignsByProject.get(row.Project)?.add(row.Campaign);
+      });
+
+      const campaigns: Array<{ project: string; campaign: string }> = [];
+      campaignsByProject.forEach((campaignSet, project) => {
+        Array.from(campaignSet)
+          .sort()
+          .forEach((campaign) => {
+            campaigns.push({ project, campaign });
+          });
+      });
+
+      this.logger.log(
+        `Generated ${reportRows.length} report rows combining leads and campaigns`,
+      );
+
+      // Tạo bảng 1: Leads theo status (không có chi phí)
+      const table1Data = this.generateLeadStatusReport(
+        leadParsed,
+        trackingParsed,
+      );
+
+      this.logger.log(
+        `Generated table 1: ${table1Data.length} rows, table 2: ${reportRows.length} rows`,
+      );
+
+      return {
+        table1: table1Data,
+        table2: reportRows,
+        projects: uniqueProjects,
+        campaigns,
+      };
+    } catch (error) {
+      this.logger.error('Error getting lead campaign report', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Tạo bảng 1: Leads theo status (theo SQL query mẫu)
+   * LEFT JOIN tracking_parsed với lead_parsed bằng LIKE (case insensitive)
+   * Group by project_name, campaign_name, status_id, status_name
+   * Count leads
+   */
+  private generateLeadStatusReport(
+    leadParsed: Array<{
+      project_name: string;
+      campaign_name: string;
+      status_id: string;
+      status_name?: string;
+    }>,
+    _trackingParsed: Array<{
+      campaign_name_clean: string;
+      total_expenses: number;
+    }>,
+  ): LeadStatusReportRow[] {
+    // Group leads theo project_name, campaign_name, status_id, status_name
+    // LEFT JOIN: tất cả leads đều được thêm vào (không cần check tracking match)
+    const leadStatusMap = new Map<string, number>();
+
+    leadParsed.forEach((lead) => {
+      // LEFT JOIN: thêm tất cả leads (có hoặc không có tracking match)
+      // Theo SQL query, LEFT JOIN không filter leads
+      const key = `${lead.project_name}|${lead.campaign_name}|${lead.status_id}|${lead.status_name || ''}`;
+      const currentCount = leadStatusMap.get(key) || 0;
+      leadStatusMap.set(key, currentCount + 1);
+    });
+
+    // Convert map thành array
+    const table1Data: LeadStatusReportRow[] = [];
+    leadStatusMap.forEach((leadCount, key) => {
+      const [project_name, campaign_name, status_id, status_name] =
+        key.split('|');
+      table1Data.push({
+        Project: project_name,
+        Campaign: campaign_name,
+        'Status ID': status_id,
+        'Status Name': status_name || '',
+        'Số Leads': leadCount,
+      });
+    });
+
+    // Sort theo số leads DESC
+    table1Data.sort((a, b) => b['Số Leads'] - a['Số Leads']);
+
+    return table1Data;
   }
 }

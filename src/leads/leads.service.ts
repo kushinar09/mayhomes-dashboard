@@ -59,12 +59,45 @@ export class LeadsService {
     const limit = filterDto.limit || 50;
     const start = (page - 1) * limit;
 
-    // Build filter từ DTO
+    // Lấy status names và source names để convert Name sang ID
+    const [statusNames, sourceNames] = await Promise.all([
+      this.bitrix24Service.getLeadStatusNames(),
+      this.bitrix24Service.getLeadSourceNames(),
+    ]);
+
+    // Convert statusName và sourceName sang ID bằng reverse lookup
+    let statusId: string | undefined;
+    if (filterDto.statusName) {
+      const statusEntry = Object.entries(statusNames).find(
+        ([, name]) => name === filterDto.statusName,
+      );
+      statusId = statusEntry ? statusEntry[0] : undefined;
+      if (!statusId) {
+        this.logger.warn(
+          `Status name "${filterDto.statusName}" not found in status names`,
+        );
+      }
+    }
+
+    let sourceId: string | undefined;
+    if (filterDto.sourceName) {
+      const sourceEntry = Object.entries(sourceNames).find(
+        ([, name]) => name === filterDto.sourceName,
+      );
+      sourceId = sourceEntry ? sourceEntry[0] : undefined;
+      if (!sourceId) {
+        this.logger.warn(
+          `Source name "${filterDto.sourceName}" not found in source names`,
+        );
+      }
+    }
+
+    // Build filter từ DTO với ID đã convert
     const filter = this.bitrix24Service.buildLeadFilter({
       dateFrom: filterDto.dateFrom,
       dateTo: filterDto.dateTo,
-      statusId: filterDto.statusId,
-      sourceId: filterDto.sourceId,
+      statusId,
+      sourceId,
       search: filterDto.search,
     });
 
@@ -116,16 +149,12 @@ export class LeadsService {
             ]),
           ];
           
-          // Lấy status names và source names
+          // Lấy user names để hiển thị (reuse statusNames và sourceNames đã lấy ở trên)
           const userNamesPromise = userIds.length > 0 
             ? this.bitrix24Service.getUserNames(userIds) 
             : Promise.resolve({} as Record<string, string>);
           
-          const [userNames, statusNames, sourceNames] = await Promise.all([
-            userNamesPromise,
-            this.bitrix24Service.getLeadStatusNames(),
-            this.bitrix24Service.getLeadSourceNames(),
-          ]);
+          const userNames = await userNamesPromise;
 
           // Gắn user names, status names và source names vào leads
           detailedLeads = detailedLeads.map((lead) => {

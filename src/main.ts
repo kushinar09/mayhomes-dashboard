@@ -6,6 +6,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import * as hbs from 'hbs';
+import * as Handlebars from 'handlebars';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -47,8 +48,8 @@ async function bootstrap() {
       filters: {
         dateFrom?: string;
         dateTo?: string;
-        statusId?: string;
-        sourceId?: string;
+        statusName?: string;
+        sourceName?: string;
         search?: string;
       },
       sort?: { sortBy?: string; sortOrder?: string },
@@ -58,8 +59,8 @@ async function bootstrap() {
 
       if (filters?.dateFrom) params.set('dateFrom', String(filters.dateFrom));
       if (filters?.dateTo) params.set('dateTo', String(filters.dateTo));
-      if (filters?.statusId) params.set('statusId', String(filters.statusId));
-      if (filters?.sourceId) params.set('sourceId', String(filters.sourceId));
+      if (filters?.statusName) params.set('statusName', String(filters.statusName));
+      if (filters?.sourceName) params.set('sourceName', String(filters.sourceName));
       if (filters?.search) params.set('search', String(filters.search));
 
       if (sort?.sortBy) params.set('sortBy', String(sort.sortBy));
@@ -77,8 +78,8 @@ async function bootstrap() {
       filters: {
         dateFrom?: string;
         dateTo?: string;
-        statusId?: string;
-        sourceId?: string;
+        statusName?: string;
+        sourceName?: string;
         search?: string;
       },
     ) => {
@@ -99,8 +100,8 @@ async function bootstrap() {
 
       if (filters?.dateFrom) params.set('dateFrom', String(filters.dateFrom));
       if (filters?.dateTo) params.set('dateTo', String(filters.dateTo));
-      if (filters?.statusId) params.set('statusId', String(filters.statusId));
-      if (filters?.sourceId) params.set('sourceId', String(filters.sourceId));
+      if (filters?.statusName) params.set('statusName', String(filters.statusName));
+      if (filters?.sourceName) params.set('sourceName', String(filters.sourceName));
       if (filters?.search) params.set('search', String(filters.search));
 
       return `/leads?${params.toString()}`;
@@ -196,6 +197,12 @@ async function bootstrap() {
 
   hbs.registerHelper('lookup', (obj: Record<string, unknown>, key: string) => {
     return obj?.[key];
+  });
+
+  hbs.registerHelper('jsString', (value: unknown) => {
+    if (value === null || value === undefined) return 'null';
+    // Return raw JSON string without HTML escaping
+    return new Handlebars.SafeString(JSON.stringify(String(value)));
   });
 
   hbs.registerHelper('isNumeric', (value: unknown) => {

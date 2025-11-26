@@ -30,11 +30,11 @@ export class LeadFilterDto {
 
   @IsOptional()
   @IsString()
-  statusId?: string;
+  statusName?: string;
 
   @IsOptional()
   @IsString()
-  sourceId?: string;
+  sourceName?: string;
 
   @IsOptional()
   @IsString()

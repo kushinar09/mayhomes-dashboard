@@ -245,6 +245,7 @@ export class Bitrix24Service {
 
     // Filter theo ngày DATE_CREATE với range operators
     // Format: YYYY-MM-DD hoặc YYYY-MM-DD HH:MI:SS
+    // Bitrix24 yêu cầu prefix kèm field name: ">=DATE_CREATE", "<=DATE_CREATE"
     if (filterDto.dateFrom || filterDto.dateTo) {
       // Nếu chỉ có dateFrom, thêm time 00:00:00 để lấy từ đầu ngày
       // Nếu chỉ có dateTo, thêm time 23:59:59 để lấy đến cuối ngày
@@ -259,14 +260,13 @@ export class Bitrix24Service {
           : `${filterDto.dateTo} 23:59:59`
         : undefined;
 
-      const dateFilter: Record<string, string> = {};
+      // Sử dụng prefix với field name theo format Bitrix24: ">=DATE_CREATE", "<=DATE_CREATE"
       if (dateFromValue) {
-        dateFilter['>='] = dateFromValue;
+        filter['>=DATE_CREATE'] = dateFromValue;
       }
       if (dateToValue) {
-        dateFilter['<='] = dateToValue;
+        filter['<=DATE_CREATE'] = dateToValue;
       }
-      filter.DATE_CREATE = dateFilter;
     }
 
     // Filter theo status (exact match)

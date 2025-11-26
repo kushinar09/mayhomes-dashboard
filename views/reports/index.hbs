@@ -177,9 +177,9 @@
 <body>
     <nav class="navbar navbar-dark">
         <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1">
+            <a class="navbar-brand mb-0 h1" href="/">
                 <i class="bi bi-graph-up"></i> MayHomes Dashboard
-            </span>
+            </a>
             <ul class="navbar-nav">
                 <li class="nav-item">
                     <a class="nav-link" href="/leads">
@@ -188,7 +188,12 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link active" href="/reports">
-                        <i class="bi bi-bar-chart"></i> Reports
+                        <i class="bi bi-bar-chart"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/reports/lead-campaign">
+                        <i class="bi bi-diagram-3"></i> Lead & Campaign
                     </a>
                 </li>
             </ul>
@@ -196,18 +201,25 @@
     </nav>
 
     <div class="container-fluid mt-4">
-        <h2>
-            <i class="bi bi-bar-chart"></i> Facebook Insight Reports
-        </h2>
-
         <div class="row">
             <div class="col-md-6 mb-3">
                 <div class="report-card">
                     <h5>
-                        <i class="bi bi-graph-up-arrow"></i> Campaign Report (Chi tiết)
+                        <i class="bi bi-graph-up-arrow"></i> Campaign Report
                     </h5>
-                    <p class="text-muted">Báo cáo chi tiết về campaigns với lead counts theo status và chi phí</p>
-                    <a href="/reports/campaigns" class="btn btn-primary">
+                    <p class="text-muted">Báo cáo chi tiết về Facebook campaigns với insights (spend, impressions, clicks)</p>
+                    <a href="/reports" class="btn btn-primary">
+                        <i class="bi bi-arrow-right-circle"></i> Xem báo cáo
+                    </a>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="report-card">
+                    <h5>
+                        <i class="bi bi-diagram-3"></i> Lead & Campaign Report
+                    </h5>
+                    <p class="text-muted">Báo cáo kết hợp leads và campaigns với số lượng leads theo status và chi phí trung bình</p>
+                    <a href="/reports/lead-campaign" class="btn btn-primary">
                         <i class="bi bi-arrow-right-circle"></i> Xem báo cáo
                     </a>
                 </div>
