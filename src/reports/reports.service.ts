@@ -3,6 +3,7 @@ import { FacebookService, FacebookInsight } from '../facebook/facebook.service';
 import { LeadsService } from '../leads/leads.service';
 import { Bitrix24Service } from '../bitrix24/bitrix24.service';
 import { Bitrix24Lead } from '../bitrix24/interfaces/bitrix24-lead.interface';
+import { ProgressUpdate } from './progress.service';
 
 export interface AdReportRow {
   'Campaign ID'?: string;
@@ -49,6 +50,11 @@ export interface LeadCampaignReportResult {
   campaigns: Array<{ project: string; campaign: string }>;
 }
 
+export interface NameSpendSummaryRow {
+  Name: string;
+  'Tổng tiền': number;
+}
+
 @Injectable()
 export class ReportsService {
   private readonly logger = new Logger(ReportsService.name);
@@ -63,7 +69,10 @@ export class ReportsService {
    * Lấy danh sách campaigns từ Facebook và lấy insights cho mỗi campaign
    * Logic: 1 ad account (act_...) gồm nhiều campaigns, mỗi campaign có 1 insight
    */
-  async getAdsReport(): Promise<AdReportRow[]> {
+  async getAdsReport(
+    onProgress?: (update: ProgressUpdate) => void,
+    requestId?: string,
+  ): Promise<AdReportRow[]> {
     try {
       // Lấy tất cả campaigns từ Facebook service cùng với ad account ID mapping
       const campaignsWithAccountMap =
@@ -92,14 +101,28 @@ export class ReportsService {
       // Batch size = 100
       const batchSize = 100;
       const campaignInsightsMap = new Map<string, FacebookInsight[]>();
+      const totalBatches = Math.ceil(campaignIds.length / batchSize);
 
       // Xử lý từng batch
       for (let i = 0; i < campaignIds.length; i += batchSize) {
         const batchCampaignIds = campaignIds.slice(i, i + batchSize);
+        const currentBatch = Math.floor(i / batchSize) + 1;
 
         this.logger.log(
-          `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(campaignIds.length / batchSize)} (${batchCampaignIds.length} campaigns)`,
+          `Processing batch ${currentBatch}/${totalBatches} (${batchCampaignIds.length} campaigns)`,
         );
+
+        // Emit progress
+        if (onProgress) {
+          onProgress({
+            stage: 'fetching_campaign_insights',
+            current: currentBatch,
+            total: totalBatches,
+            message: `Đang lấy data facebook insights progress ${currentBatch}/${totalBatches}...`,
+            percentage: Math.round((currentBatch / totalBatches) * 50), // 0-50% cho fetching insights
+            requestId,
+          });
+        }
 
         try {
           // Sử dụng Batch API để lấy insights cho nhiều campaigns cùng lúc
@@ -186,14 +209,71 @@ export class ReportsService {
   }
 
   /**
+   * Tạo bảng tổng tiền gộp theo Name
+   * Loại bỏ các cột: Campaign ID, Ads ID, Status, Impressions, Clicks
+   */
+  async getNameSpendSummary(): Promise<NameSpendSummaryRow[]> {
+    try {
+      const adsReport = await this.getAdsReport();
+
+      // Group by Name và sum Spend
+      const nameSpendMap = new Map<string, number>();
+
+      adsReport.forEach((row) => {
+        const name = row.Name || '';
+        const spend = row.Spend || 0;
+
+        if (name) {
+          const currentTotal = nameSpendMap.get(name) || 0;
+          nameSpendMap.set(name, currentTotal + spend);
+        }
+      });
+
+      // Convert map thành array
+      const summaryRows: NameSpendSummaryRow[] = Array.from(
+        nameSpendMap.entries(),
+      ).map(([name, totalSpend]) => ({
+        Name: name,
+        'Tổng tiền': Math.round(totalSpend * 100) / 100,
+      }));
+
+      // Sort theo tổng tiền DESC
+      summaryRows.sort((a, b) => b['Tổng tiền'] - a['Tổng tiền']);
+
+      this.logger.log(
+        `Generated ${summaryRows.length} name spend summary rows`,
+      );
+
+      return summaryRows;
+    } catch (error) {
+      this.logger.error('Error getting name spend summary', error);
+      throw error;
+    }
+  }
+
+  /**
    * Lấy báo cáo kết hợp leads và campaigns
    * Logic tương tự SQL query: parse source_name từ leads, aggregate theo project và campaign,
    * join với expenses từ campaigns
    */
-  async getLeadCampaignReport(): Promise<LeadCampaignReportResult> {
+  async getLeadCampaignReport(
+    onProgress?: (update: ProgressUpdate) => void,
+    requestId?: string,
+  ): Promise<LeadCampaignReportResult> {
     try {
       // Bước 1: Lấy tất cả leads và campaigns song song để tăng tốc độ
       this.logger.log('Fetching all leads and campaigns in parallel...');
+
+      if (onProgress) {
+        onProgress({
+          stage: 'fetching_source_status_names',
+          current: 0,
+          total: 1,
+          message: 'Đang lấy danh sách source và status names...',
+          percentage: 2,
+          requestId,
+        });
+      }
 
       // Lấy source names và status names để map SOURCE_ID và STATUS_ID
       const [sourceNames, statusNames] = await Promise.all([
@@ -201,21 +281,87 @@ export class ReportsService {
         this.bitrix24Service.getLeadStatusNames(),
       ]);
 
-      const [allLeads, facebookCampaigns] = await Promise.all([
-        // Lấy tất cả leads (lấy từng batch)
-        (async () => {
-          const leads: Bitrix24Lead[] = [];
-          let start = 0;
-          const batchSize = 50;
-          let hasMore = true;
+      if (onProgress) {
+        onProgress({
+          stage: 'fetching_leads',
+          current: 0,
+          total: 1,
+          message: 'Đang lấy leads từ Bitrix24...',
+          percentage: 5,
+          requestId,
+        });
+      }
 
-          while (hasMore) {
-            const response = await this.bitrix24Service.getLeads({
+      // Lấy leads với tối ưu: tăng batch size và fetch song song nhiều batch
+      const leads: Bitrix24Lead[] = [];
+      const leadsBatchSize = 100; // Tăng từ 50 lên 100 để giảm số lượng requests
+      const maxConcurrentBatches = 10; // Fetch tối đa 10 batch cùng lúc để tránh rate limit
+
+      // Bước 1: Lấy batch đầu tiên để biết total
+      if (onProgress) {
+        onProgress({
+          stage: 'fetching_leads',
+          current: 0,
+          total: 1,
+          message: 'Đang lấy thông tin tổng quan về leads...',
+          percentage: 5,
+          requestId,
+        });
+      }
+
+      const firstResponse = await this.bitrix24Service.getLeads({
+        start: 0,
+        select: ['ID', 'SOURCE_ID', 'STATUS_ID'],
+      });
+
+      const firstBatchLeads = firstResponse.result || [];
+      const totalLeads = firstResponse.total || firstBatchLeads.length;
+
+      // Map SOURCE_ID sang SOURCE_NAME và STATUS_ID sang STATUS_NAME cho batch đầu
+      const firstBatchMapped = firstBatchLeads.map((lead) => ({
+        ...lead,
+        SOURCE_NAME:
+          sourceNames[lead.SOURCE_ID as string] ||
+          lead.SOURCE_NAME ||
+          undefined,
+        STATUS_NAME:
+          statusNames[lead.STATUS_ID] || lead.STATUS_NAME || undefined,
+      }));
+
+      leads.push(...firstBatchMapped);
+
+      // Tính toán số batch còn lại cần fetch
+      const totalBatches = Math.ceil(totalLeads / leadsBatchSize);
+      const remainingBatches = totalBatches - 1; // Trừ batch đầu tiên đã lấy
+
+      if (remainingBatches > 0) {
+        // Tạo array các start positions cho các batch còn lại
+        const batchStarts: number[] = [];
+        for (let i = 1; i < totalBatches; i++) {
+          batchStarts.push(i * leadsBatchSize);
+        }
+
+        // Fetch các batch song song với concurrency limit
+        let completedBatches = 1; // Đã hoàn thành batch đầu tiên
+
+        // Chia thành các nhóm để fetch song song
+        for (let i = 0; i < batchStarts.length; i += maxConcurrentBatches) {
+          const batchGroup = batchStarts.slice(i, i + maxConcurrentBatches);
+
+          // Fetch nhóm batch này song song
+          const batchPromises = batchGroup.map((start) =>
+            this.bitrix24Service.getLeads({
               start,
               select: ['ID', 'SOURCE_ID', 'STATUS_ID'],
-            });
+            }),
+          );
 
+          const batchResponses = await Promise.all(batchPromises);
+
+          // Xử lý kết quả từ các batch
+          for (const response of batchResponses) {
             const batchLeads = response.result || [];
+            completedBatches++;
 
             // Map SOURCE_ID sang SOURCE_NAME và STATUS_ID sang STATUS_NAME
             const leadsWithMappedNames = batchLeads.map((lead) => ({
@@ -225,41 +371,91 @@ export class ReportsService {
                 lead.SOURCE_NAME ||
                 undefined,
               STATUS_NAME:
-                statusNames[lead.STATUS_ID] ||
-                lead.STATUS_NAME ||
-                undefined,
+                statusNames[lead.STATUS_ID] || lead.STATUS_NAME || undefined,
             }));
-
-            // // Debug: Log sample lead để xem fields có sẵn
-            // if (leadsWithMappedNames.length > 0 && start === 0) {
-            //   this.logger.log(
-            //     `Sample lead fields (first lead): ${JSON.stringify(Object.keys(leadsWithMappedNames[0]))}`,
-            //   );
-            //   this.logger.log(
-            //     `Sample lead STATUS_ID: ${leadsWithMappedNames[0].STATUS_ID}, STATUS_NAME: ${leadsWithMappedNames[0].STATUS_NAME}`,
-            //   );
-            // }
 
             leads.push(...leadsWithMappedNames);
 
-            if (batchLeads.length < batchSize) {
-              hasMore = false;
-            } else {
-              start += batchSize;
+            // Emit progress cho leads (5-30%)
+            if (onProgress) {
+              const progressPercent = Math.min(
+                5 + Math.round((completedBatches / totalBatches) * 25),
+                30,
+              );
+              onProgress({
+                stage: 'fetching_leads',
+                current: completedBatches,
+                total: totalBatches,
+                message: `Đang lấy leads... (${leads.length}/${totalLeads} leads đã lấy)`,
+                percentage: progressPercent,
+                requestId,
+              });
             }
           }
+        }
+      } else {
+        // Nếu chỉ có 1 batch, emit progress
+        if (onProgress) {
+          onProgress({
+            stage: 'fetching_leads',
+            current: 1,
+            total: 1,
+            message: `Đã lấy ${leads.length} leads`,
+            percentage: 30,
+            requestId,
+          });
+        }
+      }
 
-          this.logger.log(`Fetched total ${leads.length} leads`);
-          return leads;
-        })(),
-        // Lấy campaigns
-        this.getAdsReport(),
-      ]);
+      this.logger.log(`Fetched total ${leads.length} leads`);
+
+      const allLeads = leads;
+
+      // Lấy campaigns với progress tracking (30-80%)
+      if (onProgress) {
+        onProgress({
+          stage: 'fetching_campaigns',
+          current: 0,
+          total: 1,
+          message: 'Đang lấy campaigns từ Facebook...',
+          percentage: 30,
+          requestId,
+        });
+      }
+
+      const facebookCampaigns = await this.getAdsReport((update) => {
+        if (onProgress) {
+          // Scale progress từ 0-50% thành 30-80%
+          const scaledPercentage =
+            30 + Math.round((update.percentage / 50) * 50);
+          onProgress({
+            ...update,
+            stage: 'fetching_campaigns',
+            percentage: scaledPercentage,
+            message: update.message.replace(
+              'fetching_campaign_insights',
+              'fetching_campaigns',
+            ),
+            requestId,
+          });
+        }
+      }, requestId);
 
       this.logger.log(`Fetched ${facebookCampaigns.length} campaigns`);
       this.logger.log(
         `Total leads fetched: ${allLeads.length}, Leads with SOURCE_NAME: ${allLeads.filter((lead) => lead.SOURCE_NAME).length}`,
       );
+
+      if (onProgress) {
+        onProgress({
+          stage: 'processing_data',
+          current: 0,
+          total: 1,
+          message: 'Đang xử lý và phân tích dữ liệu...',
+          percentage: 80,
+          requestId,
+        });
+      }
 
       // Bước 2: Parse source_name và aggregate leads
       // Parse: split by ' | ', phần 1 là project_name, phần 2 là campaign_name
@@ -390,6 +586,17 @@ export class ReportsService {
         `Parsed ${trackingParsed.length} unique campaign expenses`,
       );
 
+      if (onProgress) {
+        onProgress({
+          stage: 'joining_data',
+          current: 0,
+          total: 1,
+          message: 'Đang kết hợp dữ liệu leads và campaigns...',
+          percentage: 90,
+          requestId,
+        });
+      }
+
       // Bước 4: Join lead_agg với tracking_parsed
       const reportRows: LeadCampaignReportRow[] = [];
 
@@ -454,6 +661,17 @@ export class ReportsService {
         `Generated ${reportRows.length} report rows combining leads and campaigns`,
       );
 
+      if (onProgress) {
+        onProgress({
+          stage: 'generating_tables',
+          current: 0,
+          total: 1,
+          message: 'Đang tạo bảng báo cáo...',
+          percentage: 95,
+          requestId,
+        });
+      }
+
       // Tạo bảng 1: Leads theo status (không có chi phí)
       const table1Data = this.generateLeadStatusReport(
         leadParsed,
@@ -463,6 +681,17 @@ export class ReportsService {
       this.logger.log(
         `Generated table 1: ${table1Data.length} rows, table 2: ${reportRows.length} rows`,
       );
+
+      if (onProgress) {
+        onProgress({
+          stage: 'completed',
+          current: 1,
+          total: 1,
+          message: 'Hoàn thành!',
+          percentage: 100,
+          requestId,
+        });
+      }
 
       return {
         table1: table1Data,
@@ -489,6 +718,7 @@ export class ReportsService {
       status_id: string;
       status_name?: string;
     }>,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _trackingParsed: Array<{
       campaign_name_clean: string;
       total_expenses: number;

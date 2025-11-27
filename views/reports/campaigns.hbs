@@ -277,12 +277,6 @@
     </nav>
 
     <div class="container-fluid mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2 class="mb-0">
-                <i class="bi bi-graph-up-arrow"></i> {{title}}
-            </h2>
-        </div>
-
         {{#if error}}
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <i class="bi bi-exclamation-triangle"></i> <strong>Lỗi:</strong> {{error}}
@@ -290,11 +284,57 @@
         </div>
         {{/if}}
 
+        <!-- Bảng tổng tiền gộp theo Name -->
+        <div class="report-card">
+            {{#if summaryData}}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-cash-stack"></i> Expenses ({{summaryData.length}} records)
+                </h5>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover table-bordered">
+                    <thead>
+                        <tr>
+                            {{#each summaryColumns}}
+                            <th>{{this}}</th>
+                            {{/each}}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#each summaryData}}
+                        <tr>
+                            {{#each ../summaryColumns}}
+                            <td class="{{#if (and (isNumeric (lookup ../this this)) (ne this 'Name'))}}number-cell{{/if}}">
+                                {{#if (lookup ../this this)}}
+                                    {{#if (or (eq this 'Name') (not (isNumeric (lookup ../this this))))}}
+                                        {{lookup ../this this}}
+                                    {{else}}
+                                        {{formatNumber (lookup ../this this)}}
+                                    {{/if}}
+                                {{else}}
+                                    <span class="text-muted">-</span>
+                                {{/if}}
+                            </td>
+                            {{/each}}
+                        </tr>
+                        {{/each}}
+                    </tbody>
+                </table>
+            </div>
+            {{else}}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Không có dữ liệu để hiển thị.
+            </div>
+            {{/if}}
+        </div>
+
         <div class="report-card">
             {{#if data}}
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="mb-0">
-                    <i class="bi bi-table"></i> Dữ liệu báo cáo ({{data.length}} dòng)
+                    <i class="bi bi-table"></i> Dữ liệu báo cáo chi tiết ({{data.length}} records)
                 </h5>
             </div>
 
