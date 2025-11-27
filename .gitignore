@@ -20,6 +20,10 @@ lerna-debug.log*
 # OS
 .DS_Store
 
+# Windows crash dumps
+*.stackdump
+bash.exe.stackdump
+
 # Tests
 /coverage
 /.nyc_output
